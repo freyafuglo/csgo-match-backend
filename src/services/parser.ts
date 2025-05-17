@@ -3,28 +3,26 @@
  * analyzer.ts kan evt. senere implementeres for at opdele ansvaret mellem parsing og analysering af data (SRP).
  */
 
-
 //omdanne timestamps til iso format
 function parseCustomTimestamp(timestamp: string): Date | null {
-    if (!timestamp) return null;
-  
-    // Split into date and time parts
-    const [datePart, timePart] = timestamp.split(" - ");
-    if (!datePart || !timePart) return null;
-  
-    // Extract month, day, year
-    const [month, day, year] = datePart.split("/");
-    if (!month || !day || !year) return null;
-  
-    // Build ISO string
-    const isoDate = `${year}-${month.padStart(2, "0")}-${day.padStart(
-      2,
-      "0"
-    )}T${timePart}Z`;
-  
-    return new Date(isoDate);
-  }
-  
+  if (!timestamp) return null;
+
+  // Split into date and time parts
+  const [datePart, timePart] = timestamp.split(" - ");
+  if (!datePart || !timePart) return null;
+
+  // Extract month, day, year
+  const [month, day, year] = datePart.split("/");
+  if (!month || !day || !year) return null;
+
+  // Build ISO string
+  const isoDate = `${year}-${month.padStart(2, "0")}-${day.padStart(
+    2,
+    "0"
+  )}T${timePart}Z`;
+
+  return new Date(isoDate);
+}
 
 interface Kill {
   round: number;
@@ -45,7 +43,10 @@ interface Stats {
   kills: Kill[];
 }
 
-function extractPlayerAndTeam(rawName: string): { player: string; team: "TERRORIST" | "CT" | null } {
+function extractPlayerAndTeam(rawName: string): {
+  player: string;
+  team: "TERRORIST" | "CT" | null;
+} {
   const teamMatch = rawName.match(/<(TERRORIST|CT)>/);
   const playerMatch = rawName.match(/^([^\<]+)/);
 
@@ -55,7 +56,11 @@ function extractPlayerAndTeam(rawName: string): { player: string; team: "TERRORI
   };
 }
 
-export async function parseMatchLog(url: string): Promise<Stats & { groupedKills: Record<"TERRORIST" | "CT", Record<string, number>> }> {
+export async function parseMatchLog(
+  url: string
+): Promise<
+  Stats & { groupedKills: Record<"TERRORIST" | "CT", Record<string, number>> }
+> {
   const response = await fetch(url);
   const text = await response.text();
   const lines = text.split("\n");
@@ -89,7 +94,6 @@ export async function parseMatchLog(url: string): Promise<Stats & { groupedKills
     );
     const time = timestampMatch ? timestampMatch[0] : "";
 
-
     // Round start
     if (line.includes('World triggered "Round_Start"')) {
       roundCount++;
@@ -104,7 +108,8 @@ export async function parseMatchLog(url: string): Promise<Stats & { groupedKills
       if (timestampMatch) {
         const roundEndTime = parseCustomTimestamp(timestampMatch[0]);
         if (roundEndTime) {
-          const roundTime = (roundEndTime.getTime() - roundStartTime.getTime()) / 1000;
+          const roundTime =
+            (roundEndTime.getTime() - roundStartTime.getTime()) / 1000;
           totalRoundTime += roundTime;
           mostKillsInRound = Math.max(mostKillsInRound, currentRoundKills);
           roundStartTime = null;
@@ -137,11 +142,11 @@ export async function parseMatchLog(url: string): Promise<Stats & { groupedKills
 
       if (killMatch) {
         const killer = killMatch[1]; // e.g., s1mple<30><STEAM_1:1:36968273><TERRORIST>
-        const victim = killMatch[2]; // e.g., func_breakable<416> or player name
+        const victim = killMatch[2]; // player name
         const weapon = killMatch[3]; // e.g., glock
 
-        // Ignore non-player victims (like func_breakable)
-        if (!victim.startsWith("func_")) {
+        // Ignore non-player victims (like func_breakable or props)
+        if (!victim.startsWith("func_") && !victim.startsWith("prop_")) {
           const kill: Kill = {
             round: roundCount,
             time,
@@ -159,7 +164,7 @@ export async function parseMatchLog(url: string): Promise<Stats & { groupedKills
     }
   }
 
-    // After  the totalKills object
+  // After  the totalKills object
   const groupedKills: Record<"TERRORIST" | "CT", Record<string, number>> = {
     TERRORIST: {},
     CT: {},
@@ -168,14 +173,13 @@ export async function parseMatchLog(url: string): Promise<Stats & { groupedKills
   for (const rawPlayerName in totalKills) {
     const { player, team } = extractPlayerAndTeam(rawPlayerName);
     if (team) {
-      groupedKills[team][player] = (groupedKills[team][player] || 0) + totalKills[rawPlayerName];
+      groupedKills[team][player] =
+        (groupedKills[team][player] || 0) + totalKills[rawPlayerName];
     }
   }
-    
-
 
   const averageRoundLength =
-  roundCount > 0 ? +(totalRoundTime / roundCount).toFixed(2) : 0; // average længde i sekunder, rundet op
+    roundCount > 0 ? +(totalRoundTime / roundCount).toFixed(2) : 0; // average længde i sekunder, rundet op
 
   return {
     averageRoundLength,
@@ -187,6 +191,5 @@ export async function parseMatchLog(url: string): Promise<Stats & { groupedKills
     bombDefuses,
     kills,
     groupedKills,
-
   };
 }
